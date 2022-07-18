@@ -11,15 +11,12 @@ import (
 	"os/signal"
 	"runtime"
 	"strconv"
-	"sync"
 	"syscall"
 
 	"github.com/fatih/color"
-	"github.com/nikola43/kasiopeavpn/app"
 	encryption "github.com/nikola43/kasiopeavpn/encryption"
 	packet "github.com/nikola43/kasiopeavpn/packet"
 	"github.com/nikola43/kasiopeavpn/reuseport"
-	"github.com/panjf2000/ants"
 	"github.com/songgao/water"
 	"golang.org/x/net/ipv4"
 )
@@ -188,10 +185,6 @@ func sndrThread(conn *net.UDPConn, iface *water.Interface) {
 
 func main() {
 
-	defer ants.Release()
-	a := new(app.App)
-	var wg sync.WaitGroup
-
 	// system config
 	numCpu := runtime.NumCPU()
 	usedCpu := numCpu
@@ -202,74 +195,55 @@ func main() {
 	PrintUserBalance("0xFABB0ac9d68B0B445fB7357272Ff202C5651694a", 932)
 	PrintUserBalance2("0xFABB0ac9d68B0B445fB7357272Ff202C5651694a", 923)
 
-	// Tasks
-	var web3Task = func() {
-		a.InitWeb3()
-		wg.Done()
+	version := flag.Bool("version", false, "print lcvpn version")
+	flag.Parse()
+	if *version {
+		fmt.Println(AppVersion)
+		os.Exit(0)
 	}
 
-	var vpnNodeTask = func() {
-		version := flag.Bool("version", false, "print lcvpn version")
-		flag.Parse()
-		if *version {
-			fmt.Println(AppVersion)
-			os.Exit(0)
-		}
+	routeReload := make(chan bool, 1)
 
-		routeReload := make(chan bool, 1)
+	InitConfig(routeReload)
 
-		InitConfig(routeReload)
+	conf := config.Load().(VPNState)
 
-		conf := config.Load().(VPNState)
+	iface := IfaceSetup(conf.Main.local)
 
-		iface := IfaceSetup(conf.Main.local)
+	// start routes changes in config monitoring
+	go RoutesThread(iface.Name(), routeReload)
 
-		// start routes changes in config monitoring
-		go RoutesThread(iface.Name(), routeReload)
+	log.Println("Interface parameters configured")
 
-		log.Println("Interface parameters configured")
-
-		// Start listen threads
-		for i := 0; i < conf.Main.RecvThreads; i++ {
-			go rcvrThread("udp4", conf.Main.Port, iface)
-		}
-
-		// init udp socket for write
-		writeAddr, err := net.ResolveUDPAddr("udp", ":")
-		if nil != err {
-			log.Fatalln("Unable to get UDP socket:", err)
-		}
-
-		writeConn, err := net.ListenUDP("udp", writeAddr)
-		if nil != err {
-			log.Fatalln("Unable to create UDP socket:", err)
-		}
-
-		// Start sender threads
-		for i := 0; i < conf.Main.SendThreads; i++ {
-			go sndrThread(writeConn, iface)
-		}
-		exitChan := make(chan os.Signal, 1)
-		signal.Notify(exitChan, syscall.SIGTERM)
-
-		<-exitChan
-
-		err = writeConn.Close()
-		if nil != err {
-			log.Println("Error closing UDP connection: ", err)
-		}
+	// Start listen threads
+	for i := 0; i < conf.Main.RecvThreads; i++ {
+		go rcvrThread("udp4", conf.Main.Port, iface)
 	}
 
-	wg.Add(1)
-	_ = ants.Submit(web3Task)
+	// init udp socket for write
+	writeAddr, err := net.ResolveUDPAddr("udp", ":")
+	if nil != err {
+		log.Fatalln("Unable to get UDP socket:", err)
+	}
 
-	wg.Add(1)
-	_ = ants.Submit(vpnNodeTask)
+	writeConn, err := net.ListenUDP("udp", writeAddr)
+	if nil != err {
+		log.Fatalln("Unable to create UDP socket:", err)
+	}
 
-	// wait all tasks
-	wg.Wait()
-	//fmt.Printf("running goroutines: %d\n", ants.Running())
-	//fmt.Printf("finish all tasks.\n")
+	// Start sender threads
+	for i := 0; i < conf.Main.SendThreads; i++ {
+		go sndrThread(writeConn, iface)
+	}
+	exitChan := make(chan os.Signal, 1)
+	signal.Notify(exitChan, syscall.SIGTERM)
+
+	<-exitChan
+
+	err = writeConn.Close()
+	if nil != err {
+		log.Println("Error closing UDP connection: ", err)
+	}
 }
 
 func PrintSystemInfo(numCpu, usedCpu int) {
