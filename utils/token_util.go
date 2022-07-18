@@ -10,8 +10,13 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/nikola43/nodesapi/models"
 )
+
+type UserTokenClaims struct {
+	ID      uint
+	Address string
+	Exp     uint
+}
 
 func GenerateUserToken(address string, userID uint) (string, error) {
 	// Create token
@@ -35,7 +40,7 @@ func GenerateUserToken(address string, userID uint) (string, error) {
 	return tokenString, nil
 }
 
-func GetUserTokenClaims(context *fiber.Ctx) (*models.UserTokenClaims, error) {
+func GetUserTokenClaims(context *fiber.Ctx) (*UserTokenClaims, error) {
 
 	if context.Locals("user") == nil {
 		return nil, errors.New("invalid claims nil token")
@@ -43,7 +48,7 @@ func GetUserTokenClaims(context *fiber.Ctx) (*models.UserTokenClaims, error) {
 
 	user := context.Locals("user").(*jwt.Token)
 	if claims, ok := user.Claims.(jwt.MapClaims); ok && user.Valid {
-		userTokenClaims := new(models.UserTokenClaims)
+		userTokenClaims := new(UserTokenClaims)
 
 		if claims["id"] != nil {
 			userTokenClaims.ID = uint(math.Round(claims["id"].(float64)))

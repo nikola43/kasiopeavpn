@@ -2,26 +2,21 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log"
-	"strings"
 
 	"github.com/antoniodipinto/ikisocket"
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/fatih/color"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/joho/godotenv"
-	middlewares "github.com/nikola43/kasiopea/middleware"
-	websockets "github.com/nikola43/kasiopea/websockets"
+	middlewares "github.com/nikola43/kasiopeavpn/middleware"
+	"github.com/nikola43/kasiopeavpn/utils"
+	websockets "github.com/nikola43/kasiopeavpn/websockets"
 	"github.com/nikola43/web3golanghelper/web3helper"
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
 var httpServer *fiber.App
@@ -54,9 +49,10 @@ func (a *App) InitWeb3() {
 	}
 	fmt.Println("Chain Id: " + chainID.String())
 
-	proccessEvents(a.web3GolangHelper)
+	//proccessEvents(a.web3GolangHelper)
 }
 
+/*
 func proccessEvents(web3GolangHelper *web3helper.Web3GolangHelper) {
 	nodeAddress := "0x2Fcd73952e53aAd026c378F378812E5bb069eF6E"
 	nodeAbi, _ := abi.JSON(strings.NewReader(string(NodeManagerV83.NodeManagerV83ABI)))
@@ -84,6 +80,7 @@ func proccessEvents(web3GolangHelper *web3helper.Web3GolangHelper) {
 		}
 	}
 }
+*/
 
 func BuildContractEventSubscription(web3GolangHelper *web3helper.Web3GolangHelper, contractAddress string, logs chan types.Log) ethereum.Subscription {
 
@@ -108,6 +105,11 @@ func (a *App) ListenBridgeEvents() {
 	app.Listen(":3020")
 }
 
+func ON(context *fiber.Ctx) error {
+	fmt.Println("ON")
+	return utils.ReturnSuccessResponse(context)
+}
+
 func InitializeHttpServer() *fiber.App {
 	httpServer = fiber.New(fiber.Config{
 		BodyLimit: 2000 * 1024 * 1024, // this is the default limit of 4MB
@@ -119,7 +121,7 @@ func InitializeHttpServer() *fiber.App {
 		AllowOrigins: "*",
 	}))
 
-	httpServer.Get("/", controllers.ON)
+	httpServer.Get("/", ON)
 
 	ws := httpServer.Group("/ws")
 
@@ -139,7 +141,7 @@ func InitializeHttpServer() *fiber.App {
 		// Add the connection to the list of the connected clients
 		// The UUID is generated randomly and is the key that allow
 		// ikisocket to manage Emit/EmitTo/Broadcast
-		models.SocketClients[userId] = kws.UUID
+		websockets.SocketClients[userId] = kws.UUID
 
 		// Every websocket connection has an optional session key => value storage
 		kws.SetAttribute("user_id", userId)
@@ -153,9 +155,9 @@ func InitializeHttpServer() *fiber.App {
 	fmt.Println(color.YellowString("  ----------------- Websockets -----------------"))
 	fmt.Println(color.CyanString("\t    Websocket URL: "), color.GreenString("ws://127.0.0.1:3000/ws"))
 
-	api := httpServer.Group("/api") // /api
-	v1 := api.Group("/v1")          // /api/v1
-	HandleRoutes(v1)
+	//api := httpServer.Group("/api") // /api
+	//v1 := api.Group("/v1")          // /api/v1
+	//HandleRoutes(v1)
 
 	/*
 		err := httpServer.Listen(port)
@@ -165,25 +167,6 @@ func InitializeHttpServer() *fiber.App {
 	*/
 
 	return httpServer
-}
-
-func InitializeDatabase(user, password, database_name string) {
-	connectionString := fmt.Sprintf(
-		"%s:%s@/%s?parseTime=true",
-		user,
-		password,
-		database_name,
-	)
-
-	DB, err := sql.Open("mysql", connectionString)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	database.GormDB, err = gorm.Open(mysql.New(mysql.Config{Conn: DB}), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
-	if err != nil {
-		log.Fatal(err)
-	}
 }
 
 // Setup all the ikisocket listeners
@@ -208,7 +191,7 @@ func setupSocketListeners() {
 	ikisocket.On(ikisocket.EventDisconnect, func(ep *ikisocket.EventPayload) {
 		fmt.Println(color.RedString("  New On Disconnect Event "), color.CyanString("User: "), color.YellowString(ep.Kws.GetStringAttribute("user_id")))
 		fmt.Println("")
-		delete(models.SocketClients, ep.Kws.GetStringAttribute("user_id"))
+		delete(websockets.SocketClients, ep.Kws.GetStringAttribute("user_id"))
 	})
 
 	// On close event
@@ -217,7 +200,7 @@ func setupSocketListeners() {
 		fmt.Println(color.RedString("  New On Close Event "), color.CyanString("User: "), color.YellowString(ep.Kws.GetStringAttribute("user_id")))
 		fmt.Println("")
 
-		delete(models.SocketClients, ep.Kws.GetStringAttribute("user_id"))
+		delete(websockets.SocketClients, ep.Kws.GetStringAttribute("user_id"))
 	})
 
 	// On error event
