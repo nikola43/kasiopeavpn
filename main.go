@@ -38,7 +38,9 @@ const (
 func rcvrThread(proto string, port int, iface *water.Interface) {
 	conn, err := reuseport.NewReusableUDPPortConn(proto, fmt.Sprintf(":%v", port))
 	if nil != err {
-		log.Fatalln("Unable to get UDP socket:", err)
+		fmt.Println(color.RedString("Unable to get UDP socket"))
+		fmt.Println(color.RedString(err.Error()))
+		os.Exit(-1)
 	}
 
 	encrypted := make([]byte, BUFFERSIZE)
@@ -46,9 +48,9 @@ func rcvrThread(proto string, port int, iface *water.Interface) {
 
 	for {
 		n, _, err := conn.ReadFrom(encrypted)
-
 		if err != nil {
-			log.Println("Error: ", err)
+			fmt.Println(color.RedString("Unable to get UDP socket"))
+			fmt.Println(color.RedString(err.Error()))
 			continue
 		}
 
@@ -60,29 +62,31 @@ func rcvrThread(proto string, port int, iface *water.Interface) {
 		conf := config.Load().(VPNState)
 
 		if !conf.Main.main.CheckSize(n) {
-			log.Println("invalid packet size ", n)
+			fmt.Println(color.RedString("invalid packet size ", n))
 			continue
 		}
 
 		size, mainErr := encryption.DecryptV4Chk(conf.Main.main, encrypted[:n], decrypted)
 		if nil != mainErr {
+			fmt.Println(color.RedString("mainErr ", mainErr))
 			if nil != conf.Main.alt {
 				size, err = encryption.DecryptV4Chk(conf.Main.alt, encrypted[:n], decrypted)
 				if nil != err {
+					fmt.Println(color.RedString("Corrupted package ", mainErr))
 					log.Println("Corrupted package: ", mainErr, " / ", err)
 					continue
 				}
 			} else {
-				log.Println("Corrupted package: ", mainErr)
+				fmt.Println(color.RedString("Corrupted package ", mainErr))
 				continue
 			}
 		}
 
 		n, err = iface.Write(decrypted[:size])
 		if nil != err {
-			log.Println("Error writing to local interface: ", err)
+			fmt.Println(color.RedString("Error writing to local interface ", err))
 		} else if n != size {
-			log.Println("Partial package written to local interface")
+			fmt.Println(color.RedString("Partial package written to local interface ", err))
 		}
 	}
 }
@@ -91,7 +95,7 @@ func sndrThread(conn *net.UDPConn, iface *water.Interface) {
 	// first time fill with random numbers
 	ivbuf := make([]byte, config.Load().(VPNState).Main.main.IVLen())
 	if _, err := io.ReadFull(rand.Reader, ivbuf); err != nil {
-		log.Fatalln("Unable to get rand data:", err)
+		fmt.Println(color.RedString("Unable to get rand data ", err))
 	}
 
 	var packet packet.IPPacket = make([]byte, BUFFERSIZE)
@@ -100,12 +104,14 @@ func sndrThread(conn *net.UDPConn, iface *water.Interface) {
 	for {
 		plen, err := iface.Read(packet[:MTU])
 		if err != nil {
+			fmt.Println(color.RedString("err ", err))
 			break
 		}
 
 		if 4 != packet.IPver() {
 			header, _ := ipv4.ParseHeader(packet)
-			log.Printf("Non IPv4 packet [%+v]\n", header)
+			//log.Printf("Non IPv4 packet [%+v]\n", header)
+			fmt.Println(color.YellowString("Non IPv4 packet ", header))
 			continue
 		}
 
