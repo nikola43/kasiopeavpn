@@ -9,11 +9,17 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"runtime"
+	"strconv"
+	"sync"
 	"syscall"
 
+	"github.com/fatih/color"
+	"github.com/nikola43/kasiopeavpn/app"
 	encryption "github.com/nikola43/kasiopeavpn/encryption"
 	packet "github.com/nikola43/kasiopeavpn/packet"
 	"github.com/nikola43/kasiopeavpn/reuseport"
+	"github.com/panjf2000/ants"
 	"github.com/songgao/water"
 	"golang.org/x/net/ipv4"
 )
@@ -182,57 +188,113 @@ func sndrThread(conn *net.UDPConn, iface *water.Interface) {
 
 func main() {
 
-	version := flag.Bool("version", false, "print lcvpn version")
-	flag.Parse()
+	defer ants.Release()
+	a := new(app.App)
+	var wg sync.WaitGroup
 
-	if *version {
-		fmt.Println(AppVersion)
-		os.Exit(0)
+	// system config
+	numCpu := runtime.NumCPU()
+	usedCpu := numCpu
+	runtime.GOMAXPROCS(usedCpu)
+
+	PrintSystemInfo(numCpu, usedCpu)
+	PrintNetworkStatus()
+
+	// Tasks
+	var web3Task = func() {
+		a.InitWeb3()
+		wg.Done()
 	}
 
-	routeReload := make(chan bool, 1)
+	var vpnNodeTask = func() {
+		version := flag.Bool("version", false, "print lcvpn version")
+		flag.Parse()
+		if *version {
+			fmt.Println(AppVersion)
+			os.Exit(0)
+		}
 
-	InitConfig(routeReload)
+		routeReload := make(chan bool, 1)
 
-	conf := config.Load().(VPNState)
+		InitConfig(routeReload)
 
-	iface := IfaceSetup(conf.Main.local)
+		conf := config.Load().(VPNState)
 
-	// start routes changes in config monitoring
-	go RoutesThread(iface.Name(), routeReload)
+		iface := IfaceSetup(conf.Main.local)
 
-	log.Println("Interface parameters configured")
+		// start routes changes in config monitoring
+		go RoutesThread(iface.Name(), routeReload)
 
-	// Start listen threads
-	for i := 0; i < conf.Main.RecvThreads; i++ {
-		go rcvrThread("udp4", conf.Main.Port, iface)
+		log.Println("Interface parameters configured")
+
+		// Start listen threads
+		for i := 0; i < conf.Main.RecvThreads; i++ {
+			go rcvrThread("udp4", conf.Main.Port, iface)
+		}
+
+		// init udp socket for write
+		writeAddr, err := net.ResolveUDPAddr("udp", ":")
+		if nil != err {
+			log.Fatalln("Unable to get UDP socket:", err)
+		}
+
+		writeConn, err := net.ListenUDP("udp", writeAddr)
+		if nil != err {
+			log.Fatalln("Unable to create UDP socket:", err)
+		}
+
+		// Start sender threads
+		for i := 0; i < conf.Main.SendThreads; i++ {
+			go sndrThread(writeConn, iface)
+		}
+		exitChan := make(chan os.Signal, 1)
+		signal.Notify(exitChan, syscall.SIGTERM)
+
+		<-exitChan
+
+		err = writeConn.Close()
+		if nil != err {
+			log.Println("Error closing UDP connection: ", err)
+		}
 	}
 
-	// init udp socket for write
+	wg.Add(1)
+	_ = ants.Submit(web3Task)
 
-	writeAddr, err := net.ResolveUDPAddr("udp", ":")
-	if nil != err {
-		log.Fatalln("Unable to get UDP socket:", err)
-	}
+	wg.Add(1)
+	_ = ants.Submit(vpnNodeTask)
 
-	writeConn, err := net.ListenUDP("udp", writeAddr)
-	if nil != err {
-		log.Fatalln("Unable to create UDP socket:", err)
-	}
+	// wg.Add(1)
+	// _ = ants.Submit(rpcServerTask)
 
-	// Start sender threads
+	// wait all tasks
+	wg.Wait()
+	//fmt.Printf("running goroutines: %d\n", ants.Running())
+	//fmt.Printf("finish all tasks.\n")
 
-	for i := 0; i < conf.Main.SendThreads; i++ {
-		go sndrThread(writeConn, iface)
-	}
+}
 
-	exitChan := make(chan os.Signal, 1)
-	signal.Notify(exitChan, syscall.SIGTERM)
+func PrintSystemInfo(numCpu, usedCpu int) {
+	fmt.Println("")
+	fmt.Println(color.YellowString("  ----------------- System Info -----------------"))
+	fmt.Println(color.CyanString("\t    Number CPU cores available: "), color.GreenString(strconv.Itoa(numCpu)))
+	fmt.Println(color.MagentaString("\t    Used of CPU cores: "), color.YellowString(strconv.Itoa(usedCpu)))
+	fmt.Println(color.MagentaString(""))
+}
 
-	<-exitChan
+func PrintNetworkStatus() {
+	fmt.Println(color.YellowString("  ----------------- Network Info -----------------"))
+	fmt.Println(color.CyanString("\t    Number Nodes: "), color.YellowString(strconv.Itoa(3)))
+	fmt.Println(color.CyanString("\t    Prague: "), color.YellowString(strconv.Itoa(1)))
+	fmt.Println(color.CyanString("\t    Kiev: "), color.YellowString(strconv.Itoa(1)))
+	fmt.Println(color.CyanString("\t    Singapour: "), color.YellowString(strconv.Itoa(1)))
+	fmt.Println()
+}
 
-	err = writeConn.Close()
-	if nil != err {
-		log.Println("Error closing UDP connection: ", err)
-	}
+func PrintUserBalance(numCpu, usedCpu int) {
+	fmt.Println("")
+	fmt.Println(color.YellowString("  ----------------- User Info -----------------"))
+	fmt.Println(color.CyanString("\t    Number CPU cores available: "), color.GreenString(strconv.Itoa(numCpu)))
+	fmt.Println(color.MagentaString("\t    Used of CPU cores: "), color.YellowString(strconv.Itoa(usedCpu)))
+	fmt.Println(color.MagentaString(""))
 }
