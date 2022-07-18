@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"syscall"
 
+	"github.com/fatih/color"
 	encryption "github.com/nikola43/kasiopeavpn/encryption"
 	"gopkg.in/gcfg.v1"
 )
@@ -123,7 +124,8 @@ func readConfig() error {
 			fmt.Println(ips)
 			if _, ok := ips[r.ExtIP]; ok {
 				newConfig.Main.local = fmt.Sprintf("%s/%d", r.LocIP, newConfig.Main.NetCIDR)
-				log.Printf("%s (%s) is detected as local ip\n", newConfig.Main.local, name)
+				fmt.Println(color.CyanString("Error writing to local interface"), color.CyanString(newConfig.Main.local))
+				fmt.Println(color.CyanString("IP"), color.CyanString(name))
 				// we don't need it in routes and so on
 				delete(newConfig.Remote, name)
 				break

@@ -100,5 +100,4 @@ one failed. This allow to use next algoritm to change keys without link going of
 * please let me know if you need anything more
 
 
-sudo ./kasiopeavpn -local prague -config lcvpn.conf
-sudo ./kasiopeavpn -config lcvpn.conf
+sudo ./kasiopeavpn -local home -config lcvpn.conf
