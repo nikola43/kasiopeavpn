@@ -199,6 +199,8 @@ func main() {
 
 	PrintSystemInfo(numCpu, usedCpu)
 	PrintNetworkStatus()
+	PrintUserBalance("0xFABB0ac9d68B0B445fB7357272Ff202C5651694a", 932)
+	PrintUserBalance2("0xFABB0ac9d68B0B445fB7357272Ff202C5651694a", 923)
 
 	// Tasks
 	var web3Task = func() {
@@ -264,22 +266,18 @@ func main() {
 	wg.Add(1)
 	_ = ants.Submit(vpnNodeTask)
 
-	// wg.Add(1)
-	// _ = ants.Submit(rpcServerTask)
-
 	// wait all tasks
 	wg.Wait()
 	//fmt.Printf("running goroutines: %d\n", ants.Running())
 	//fmt.Printf("finish all tasks.\n")
-
 }
 
 func PrintSystemInfo(numCpu, usedCpu int) {
 	fmt.Println("")
 	fmt.Println(color.YellowString("  ----------------- System Info -----------------"))
 	fmt.Println(color.CyanString("\t    Number CPU cores available: "), color.GreenString(strconv.Itoa(numCpu)))
-	fmt.Println(color.MagentaString("\t    Used of CPU cores: "), color.YellowString(strconv.Itoa(usedCpu)))
-	fmt.Println(color.MagentaString(""))
+	fmt.Println(color.CyanString("\t    Used of CPU cores: "), color.YellowString(strconv.Itoa(usedCpu)))
+	fmt.Println()
 }
 
 func PrintNetworkStatus() {
@@ -291,10 +289,18 @@ func PrintNetworkStatus() {
 	fmt.Println()
 }
 
-func PrintUserBalance(numCpu, usedCpu int) {
-	fmt.Println("")
-	fmt.Println(color.YellowString("  ----------------- User Info -----------------"))
-	fmt.Println(color.CyanString("\t    Number CPU cores available: "), color.GreenString(strconv.Itoa(numCpu)))
-	fmt.Println(color.MagentaString("\t    Used of CPU cores: "), color.YellowString(strconv.Itoa(usedCpu)))
-	fmt.Println(color.MagentaString(""))
+func PrintUserBalance(address string, balance int) {
+	fmt.Println(color.YellowString("  ----------------- Node Owner -----------------"))
+	fmt.Println(color.CyanString("  "), color.GreenString(address))
+	fmt.Println(color.CyanString("\t    Balance: "), color.YellowString(strconv.Itoa(balance)), color.YellowString(" $ZOE"))
+	fmt.Println()
+}
+
+func PrintUserBalance2(address string, balance int) {
+	fmt.Println(color.YellowString("  ----------------- Network Info -----------------"))
+	fmt.Println(color.CyanString("\t    Send: "), color.YellowString(strconv.Itoa(1732)), color.YellowString("MB"))
+	fmt.Println(color.CyanString("\t    Received: "), color.YellowString(strconv.Itoa(1343)), color.YellowString("MB"))
+	fmt.Println(color.CyanString("\t    Duration: "), color.YellowString("19:20:04"))
+	fmt.Println(color.RedString("\t    Paid: "), color.YellowString(strconv.Itoa(1)), color.YellowString("$ZOE = 2.52$"))
+	fmt.Println()
 }
