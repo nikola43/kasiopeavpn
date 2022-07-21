@@ -4,9 +4,11 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net"
 
+	"github.com/fatih/color"
 	"github.com/milosgajdos/tenus"
 	"github.com/nikola43/kasiopeavpn/netlink"
 	"github.com/songgao/water"
@@ -32,8 +34,7 @@ func IfaceSetup(localCIDR string) *water.Interface {
 		log.Println("Unable to allocate TUN interface:", err)
 		panic(err)
 	}
-
-	log.Println("Interface allocated:", iface.Name())
+	fmt.Println(color.CyanString("Interface allocated: "), color.YellowString(iface.Name()))
 
 	link, err := tenus.NewLinkFrom(iface.Name())
 	if nil != err {

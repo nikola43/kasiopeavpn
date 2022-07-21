@@ -35,6 +35,9 @@ const (
 	BUFFERSIZE = 1518
 )
 
+var totalSend = 0
+var totalReceived = 0
+
 func rcvrThread(proto string, port int, iface *water.Interface) {
 	conn, err := reuseport.NewReusableUDPPortConn(proto, fmt.Sprintf(":%v", port))
 	if nil != err {
@@ -58,9 +61,10 @@ func rcvrThread(proto string, port int, iface *water.Interface) {
 		if 0 == n {
 			continue
 		}
+		receivedBytes := strconv.Itoa(n)
+		fmt.Println(color.CyanString("Received "), color.CyanString(receivedBytes), color.CyanString("bytes"))
 
 		conf := config.Load().(VPNState)
-
 		if !conf.Main.main.CheckSize(n) {
 			fmt.Println(color.RedString("invalid packet size ", n))
 			continue
@@ -110,20 +114,16 @@ func sndrThread(conn *net.UDPConn, iface *water.Interface) {
 
 		if 4 != packet.IPver() {
 			header, _ := ipv4.ParseHeader(packet)
-			//log.Printf("Non IPv4 packet [%+v]\n", header)
-			fmt.Println(color.YellowString("Non IPv4 packet ", header))
+			log.Printf("Non IPv4 packet [%+v]\n", header)
 			continue
 		}
 
 		// each time get pointer to (probably) new config
 		c := config.Load().(VPNState)
-
 		dst := packet.Dst()
 
 		wanted := false
-
 		addr, ok := c.remotes[dst]
-
 		if ok {
 			wanted = true
 		}
@@ -133,7 +133,9 @@ func sndrThread(conn *net.UDPConn, iface *water.Interface) {
 		}
 
 		// very ugly and useful only for a limited numbers of routes!
-		log.Println("wanted DstV4", wanted)
+		fmt.Println(color.CyanString("wanted DstV4"))
+		fmt.Println(wanted)
+
 		var ip net.IP
 		if !wanted {
 			ip = packet.DstV4()
@@ -147,7 +149,8 @@ func sndrThread(conn *net.UDPConn, iface *water.Interface) {
 				}
 			}
 		}
-		log.Println("wanted", wanted)
+		fmt.Println(color.CyanString("wanted DstV4"))
+		fmt.Println(wanted)
 		if wanted {
 			log.Println("ip wanted", ip)
 			// new len contatins also 2byte original size
@@ -159,7 +162,10 @@ func sndrThread(conn *net.UDPConn, iface *water.Interface) {
 			}
 
 			tsize := c.Main.main.Encrypt(packet[:clen], encrypted, ivbuf)
-
+			sendedtsizeBytes := strconv.Itoa(tsize)
+			fmt.Println(color.CyanString("sendedtsizeBytes"), color.CyanString(sendedtsizeBytes), color.CyanString("bytes"))
+			fmt.Println("OK")
+			fmt.Println(ok)
 			if ok {
 				n, err := conn.WriteToUDP(encrypted[:tsize], addr)
 				if nil != err {
@@ -168,7 +174,9 @@ func sndrThread(conn *net.UDPConn, iface *water.Interface) {
 				if n != tsize {
 					log.Println("Only ", n, " bytes of ", tsize, " sent")
 				}
-				log.Println("n WriteToUDP", n)
+				sendedBytes := strconv.Itoa(n)
+				fmt.Println(color.CyanString("WriteToUDP"), color.CyanString(sendedBytes), color.CyanString("bytes"))
+				totalSend += n
 			} else {
 				// multicast or broadcast
 				for _, addr := range c.remotes {
@@ -179,12 +187,20 @@ func sndrThread(conn *net.UDPConn, iface *water.Interface) {
 					if n != tsize {
 						log.Println("Only ", n, " bytes of ", tsize, " sent")
 					}
-					log.Println("n broadcast", n)
+					receivedBytes := strconv.Itoa(n)
+					fmt.Println(color.CyanString("Send Broadcast "), color.CyanString(receivedBytes), color.CyanString("bytes"))
+					totalSend += n
 				}
 			}
+
+			
 		} else {
 			log.Println("Unknown dst: ", dst)
 		}
+		totalSendBytes := strconv.Itoa(totalSend)
+		fmt.Println(color.CyanString("TotalSendBytes "), color.CyanString(totalSendBytes), color.CyanString("bytes"))
+
+		log.Println("-------------------------------------------------------------------------------------------------------------------------")
 	}
 
 }
@@ -218,7 +234,6 @@ func main() {
 
 	// start routes changes in config monitoring
 	go RoutesThread(iface.Name(), routeReload)
-
 	log.Println("Interface parameters configured")
 
 	// Start listen threads
