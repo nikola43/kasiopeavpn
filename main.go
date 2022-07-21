@@ -133,26 +133,30 @@ func sndrThread(conn *net.UDPConn, iface *water.Interface) {
 		}
 
 		// very ugly and useful only for a limited numbers of routes!
-		fmt.Println(color.CyanString("wanted DstV4"))
-		fmt.Println(wanted)
-
+		//wanted = false
 		var ip net.IP
 		if !wanted {
 			ip = packet.DstV4()
-			log.Println("ip", ip)
+			log.Println("packet.DstV4()", packet.DstV4())
 			for n, s := range c.routes {
 				if n.Contains(ip) {
 					addr = s
 					ok = true
 					wanted = true
+
+					log.Println("addr", addr)
+					log.Println("ok", ok)
+					log.Println("wanted", wanted)
+
 					break
 				}
 			}
 		}
-		fmt.Println(color.CyanString("wanted DstV4"))
-		fmt.Println(wanted)
+		log.Println("wanted", wanted)
+		fmt.Println("OK")
+		fmt.Println(ok)
 		if wanted {
-			log.Println("ip wanted", ip)
+		
 			// new len contatins also 2byte original size
 			clen := c.Main.main.AdjustInputSize(plen)
 
@@ -162,10 +166,8 @@ func sndrThread(conn *net.UDPConn, iface *water.Interface) {
 			}
 
 			tsize := c.Main.main.Encrypt(packet[:clen], encrypted, ivbuf)
-			sendedtsizeBytes := strconv.Itoa(tsize)
-			fmt.Println(color.CyanString("sendedtsizeBytes"), color.CyanString(sendedtsizeBytes), color.CyanString("bytes"))
-			fmt.Println("OK")
-			fmt.Println(ok)
+			
+		
 			if ok {
 				n, err := conn.WriteToUDP(encrypted[:tsize], addr)
 				if nil != err {
@@ -175,7 +177,7 @@ func sndrThread(conn *net.UDPConn, iface *water.Interface) {
 					log.Println("Only ", n, " bytes of ", tsize, " sent")
 				}
 				sendedBytes := strconv.Itoa(n)
-				fmt.Println(color.CyanString("WriteToUDP"), color.CyanString(sendedBytes), color.CyanString("bytes"))
+				fmt.Println(color.CyanString("Send WriteToUDP"), color.CyanString(sendedBytes), color.CyanString("bytes"))
 				totalSend += n
 			} else {
 				// multicast or broadcast
@@ -187,13 +189,12 @@ func sndrThread(conn *net.UDPConn, iface *water.Interface) {
 					if n != tsize {
 						log.Println("Only ", n, " bytes of ", tsize, " sent")
 					}
-					receivedBytes := strconv.Itoa(n)
-					fmt.Println(color.CyanString("Send Broadcast "), color.CyanString(receivedBytes), color.CyanString("bytes"))
+					sendedBytes := strconv.Itoa(n)
+					fmt.Println(color.CyanString("Send Broadcast "), color.CyanString(sendedBytes), color.CyanString("bytes"))
 					totalSend += n
 				}
 			}
 
-			
 		} else {
 			log.Println("Unknown dst: ", dst)
 		}
